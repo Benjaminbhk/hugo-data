@@ -239,16 +239,24 @@ def main():
         # Post-traitement avec openpyxl pour réécrire les formules de la colonne "Closing1d"
         wb = load_workbook(save_path)
         ws = wb.active
+        # Réécrire la formule exactement pour éviter l'ajout de "@" par Excel
         closing1d_col_idx = final_sorted.columns.get_loc("Closing1d") + 1  # openpyxl utilise un index 1-based
         for row_num in range(2, ws.max_row + 1):
             cell = ws.cell(row=row_num, column=closing1d_col_idx)
             if isinstance(cell.value, str) and cell.value.startswith("="):
-                # Réécrire la formule exactement pour éviter l'ajout de "@" par Excel
                 ws.cell(row=row_num, column=closing1d_col_idx).value = f'=BDH(J{row_num}&" Index", "PX_CLOSE_1D",O{row_num},O{row_num})'
+
+        # Définition de level_col_idx AVANT son utilisation
         level_col_idx = final_sorted.columns.get_loc("Level") + 1
+        # Insertion de la formule pour "Level" pour les lignes "Outright"
+        structure_col_idx = final_sorted.columns.get_loc("Structure") + 1  # Index de la colonne "Structure"
+        for row_num in range(2, ws.max_row + 1):
+            if ws.cell(row=row_num, column=structure_col_idx).value == "Outright":
+                ws.cell(row=row_num, column=level_col_idx).value = f"=F{row_num}/G{row_num}"
+        # Formatage de la colonne "Level"
         for row_num in range(2, ws.max_row + 1):
             cell = ws.cell(row=row_num, column=level_col_idx)
-            cell.number_format = "0.00%"
+            cell.number_format = "0.000"
         wb.save(save_path)
         print(f"Fichier enregistré sous : {save_path}")
     else:
