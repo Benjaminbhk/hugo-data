@@ -205,6 +205,26 @@ def process_files(uploaded_files, trade_date):
             final_sorted.at[i, "Closing1d"] = f'=BDH(J{excel_row}&" Index", "PX_CLOSE_1D",O{excel_row},O{excel_row})'
         else:
             final_sorted.at[i, "Closing1d"] = ""
+
+    # Insertion de la formule dans la colonne "Level" pour les "Outright"
+    # On insère ici une formule Excel qui calcule (Price/Closing1d - 1)
+    for i, row in final_sorted.iterrows():
+        if row["Structure"] == "Outright":
+            excel_row = i + 2
+            final_sorted.at[i, "Level"] = f'=(F{excel_row}/G{excel_row})'
+
+    # Détection des Roll-Client : on vérifie uniquement les lignes de type Leg pour déterminer si les 2 legs ont le même Price
+    roll_groups = final_sorted[final_sorted['Structure'].isin(['Roll', 'Leg'])].groupby(
+        final_sorted['Structure_ID'].str.extract(r'(\d{8}-R-\d+)')[0]
+    )
+    for roll_id, group in roll_groups:
+        # Récupérer uniquement les lignes de type Leg
+        group_legs = group[group['Structure'] == 'Leg']
+        if len(group_legs) == 2 and group_legs['Price'].nunique() == 1:
+            # Mise à jour uniquement de la ligne de synthèse (summary) ayant Structure "Roll"
+            summary_indices = group[group['Structure'] == 'Roll'].index
+            final_sorted.loc[summary_indices, 'Structure'] = 'Roll-Client'
+
     return final_sorted
 
 def postprocess_excel(final_sorted):
