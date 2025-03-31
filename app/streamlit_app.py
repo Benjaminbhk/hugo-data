@@ -272,55 +272,55 @@ def save_processed_data(new_data, filename="data/processed/processed_data.csv"):
     combined.to_csv(filename, index=False)
     return combined
 
-# ------------------------
-# Fonctions pour le calendrier
-# ------------------------
+# # ------------------------
+# # Fonctions pour le calendrier
+# # ------------------------
 
-def generate_month_calendar(year, month, processed_dates_set):
-    """
-    Génère un calendrier HTML pour un mois donné.
-    Les dates présentes dans processed_dates_set sont surlignées en rouge avec du texte en gras.
-    """
-    month_days = calendar.monthcalendar(year, month)
-    html = f'<table border="1" style="border-collapse: collapse; text-align: center; margin: 10px;">'
-    html += f'<tr><th colspan="7" style="background-color: #ddd;">{calendar.month_name[month]} {year}</th></tr>'
-    # En-tête des jours (abréviations en français)
-    jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-    html += "<tr>" + "".join(f"<th style='padding: 2px 6px; background-color: #f0f0f0;'>{j}</th>" for j in jours) + "</tr>"
-    for week in month_days:
-        html += "<tr>"
-        for day in week:
-            if day == 0:
-                html += "<td>&nbsp;</td>"
-            else:
-                d = date(year, month, day)
-                if d in processed_dates_set:
-                    html += f'<td style="padding: 4px; background-color: red; color: white; font-weight: bold;">{day}</td>'
-                else:
-                    html += f'<td style="padding: 4px;">{day}</td>'
-        html += "</tr>"
-    html += "</table>"
-    return html
+# def generate_month_calendar(year, month, processed_dates_set):
+#     """
+#     Génère un calendrier HTML pour un mois donné.
+#     Les dates présentes dans processed_dates_set sont surlignées en rouge avec du texte en gras.
+#     """
+#     month_days = calendar.monthcalendar(year, month)
+#     html = f'<table border="1" style="border-collapse: collapse; text-align: center; margin: 10px;">'
+#     html += f'<tr><th colspan="7" style="background-color: #ddd;">{calendar.month_name[month]} {year}</th></tr>'
+#     # En-tête des jours (abréviations en français)
+#     jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+#     html += "<tr>" + "".join(f"<th style='padding: 2px 6px; background-color: #f0f0f0;'>{j}</th>" for j in jours) + "</tr>"
+#     for week in month_days:
+#         html += "<tr>"
+#         for day in week:
+#             if day == 0:
+#                 html += "<td>&nbsp;</td>"
+#             else:
+#                 d = date(year, month, day)
+#                 if d in processed_dates_set:
+#                     html += f'<td style="padding: 4px; background-color: red; color: white; font-weight: bold;">{day}</td>'
+#                 else:
+#                     html += f'<td style="padding: 4px;">{day}</td>'
+#         html += "</tr>"
+#     html += "</table>"
+#     return html
 
-def generate_calendar_html(processed_dates_set):
-    """
-    Génère un bloc HTML affichant les calendriers des trois derniers mois.
-    """
-    html_parts = []
-    today = date.today()
-    months = []
-    # Calculer les 3 derniers mois (incluant le mois courant)
-    for i in range(3):
-        m = today.month - i
-        y = today.year
-        if m <= 0:
-            m += 12
-            y -= 1
-        months.append((y, m))
-    months = sorted(months)  # Afficher dans l'ordre chronologique
-    for (y, m) in months:
-        html_parts.append(generate_month_calendar(y, m, processed_dates_set))
-    return '<div style="display: flex; flex-wrap: wrap;">' + "".join(html_parts) + '</div>'
+# def generate_calendar_html(processed_dates_set):
+#     """
+#     Génère un bloc HTML affichant les calendriers des trois derniers mois.
+#     """
+#     html_parts = []
+#     today = date.today()
+#     months = []
+#     # Calculer les 3 derniers mois (incluant le mois courant)
+#     for i in range(3):
+#         m = today.month - i
+#         y = today.year
+#         if m <= 0:
+#             m += 12
+#             y -= 1
+#         months.append((y, m))
+#     months = sorted(months)  # Afficher dans l'ordre chronologique
+#     for (y, m) in months:
+#         html_parts.append(generate_month_calendar(y, m, processed_dates_set))
+#     return '<div style="display: flex; flex-wrap: wrap;">' + "".join(html_parts) + '</div>'
 
 # ------------------------
 # Fonction principale
@@ -349,31 +349,31 @@ def main():
                     )
                     st.dataframe(processed_df)
 
-    # ------------------------
-    # Affichage du calendrier en bas de page
-    # ------------------------
-    st.markdown("---")
-    st.markdown("### Calendrier des trois derniers mois")
-    processed_dates_set = set()
-    global_file = "data/processed/processed_data.csv"
-    if os.path.exists(global_file):
-        try:
-            df_global = pd.read_csv(global_file)
-            # On suppose que la colonne 'Date' est au format MM/DD/YYYY
-            for d_str in df_global['Date'].unique():
-                try:
-                    d_str = d_str.strip()  # nettoyage des espaces éventuels
-                    d_obj = datetime.strptime(d_str, "%m/%d/%Y").date()
-                    processed_dates_set.add(d_obj)
-                except Exception as e:
-                    pass
-        except Exception as e:
-            st.error("Erreur lors du chargement du fichier global.")
-    else:
-        st.info("Aucune donnée traitée pour l'instant.")
+    # # ------------------------
+    # # Affichage du calendrier en bas de page
+    # # ------------------------
+    # st.markdown("---")
+    # st.markdown("### Calendrier des trois derniers mois")
+    # processed_dates_set = set()
+    # global_file = "data/processed/processed_data.csv"
+    # if os.path.exists(global_file):
+    #     try:
+    #         df_global = pd.read_csv(global_file)
+    #         # On suppose que la colonne 'Date' est au format MM/DD/YYYY
+    #         for d_str in df_global['Date'].unique():
+    #             try:
+    #                 d_str = d_str.strip()  # nettoyage des espaces éventuels
+    #                 d_obj = datetime.strptime(d_str, "%m/%d/%Y").date()
+    #                 processed_dates_set.add(d_obj)
+    #             except Exception as e:
+    #                 pass
+    #     except Exception as e:
+    #         st.error("Erreur lors du chargement du fichier global.")
+    # else:
+    #     st.info("Aucune donnée traitée pour l'instant.")
 
-    calendar_html = generate_calendar_html(processed_dates_set)
-    st.markdown(calendar_html, unsafe_allow_html=True)
+    # calendar_html = generate_calendar_html(processed_dates_set)
+    # st.markdown(calendar_html, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()

@@ -28,10 +28,10 @@ jobs:
         run: |
           python -m venv venv
           source venv/bin/activate
-      
+
       - name: Install dependencies
         run: pip install -r requirements.txt
-        
+
       # Optional: Add step to run tests here (PyTest, Django test suites, etc.)
 
       - name: Zip artifact for deployment
@@ -64,13 +64,13 @@ jobs:
       - name: Unzip artifact for deployment
         run: unzip release.zip
 
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_0903EDADFBAF419DAAAEDE2E1D9C5416 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_08AFA2F016144E6F80B0FCEB554853B5 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_99FBFCA121AE4F1B865050C704EF24A7 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_06540803E03F41C6A8770DCF97AEB8AE }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_72FD006A3E4C489FBF0F3172C4C62207 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2519E63118764B57B0E56E19DEA89383 }}
 
       - name: 'Deploy to Azure Web App'
         uses: azure/webapps-deploy@v3
@@ -78,4 +78,3 @@ jobs:
         with:
           app-name: 'HugoData'
           slot-name: 'Production'
-          
