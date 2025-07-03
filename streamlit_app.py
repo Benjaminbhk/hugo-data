@@ -203,7 +203,7 @@ def process_files(uploaded_files, trade_date):
     for i, row in final_sorted.iterrows():
         excel_row = i + 2  # Excel commence à la ligne 2 (après l'en-tête)
         if row["Structure"] in ["Roll", "Outright"]:
-            final_sorted.at[i, "Closing1d"] = f'=BDH(J{excel_row}&" Index", "PX_CLOSE_1D",O{excel_row},O{excel_row})'
+            final_sorted.at[i, "Closing1d"] = f'=BDH(L{excel_row}&" Index", "PX_CLOSE_1D",R{excel_row},R{excel_row})'
         else:
             final_sorted.at[i, "Closing1d"] = ""
 
@@ -228,8 +228,18 @@ def process_files(uploaded_files, trade_date):
             final_sorted.loc[summary_row.index, 'Structure'] = 'Roll Client'
 
     final_sorted = detect_roll_clients_by_notional(final_sorted)
-
+    final_sorted = reorder_columns(final_sorted)
     return final_sorted
+
+def reorder_columns(df):
+    desired_order = [
+        'Time', 'Level', 'Ticker', 'Notional', 'Size', 'Price', 'Closing1d',
+        'Structure_ID', 'Structure', 'Volume', '1DChg', 'UndTkr', '1PtVal',
+        'Exch', 'FutName', 'UndCmpName', 'UndPrc', 'Date'
+    ]
+    # Garder les colonnes restantes à la fin s’il y en a
+    other_columns = [col for col in df.columns if col not in desired_order]
+    return df[desired_order + other_columns]
 
 def detect_roll_clients_by_notional(df):
     """
@@ -260,10 +270,10 @@ def postprocess_excel(final_sorted):
     wb = load_workbook(output)
     ws = wb.active
     closing1d_col_idx = final_sorted.columns.get_loc("Closing1d") + 1  # openpyxl est 1-indexé
-    for row_num in range(2, ws.max_row + 1):
+    for row_num in range(4, ws.max_row + 1):
         cell = ws.cell(row=row_num, column=closing1d_col_idx)
         if isinstance(cell.value, str) and cell.value.startswith("="):
-            ws.cell(row=row_num, column=closing1d_col_idx).value = f'=BDH(J{row_num}&" Index", "PX_CLOSE_1D",O{row_num},O{row_num})'
+            ws.cell(row=row_num, column=closing1d_col_idx).value = f'=BDH(L{row_num}&" Index", "PX_CLOSE_1D",R{row_num},R{row_num})'
     level_col_idx = final_sorted.columns.get_loc("Level") + 1 if "Level" in final_sorted.columns else None
     if level_col_idx:
         for row_num in range(2, ws.max_row + 1):
