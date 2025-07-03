@@ -123,6 +123,7 @@ def process_files(uploaded_files, trade_date):
         else:
             return 'Autre'
     final_df['Structure'] = final_df['Structure_ID'].apply(extract_Structure)
+    final_df['Structure'] = final_df['Structure'].replace("Screen", "Roll Screen")
 
     # Regroupement par catégorie et tri global
     order_mapping = {'Leg': 0, 'Screen': 1, 'Outright': 2, 'Autre': 3}
@@ -220,12 +221,35 @@ def process_files(uploaded_files, trade_date):
     for roll_id, group in roll_groups:
         # Récupérer uniquement les lignes de type Leg
         group_legs = group[group['Structure'] == 'Leg']
-        if len(group_legs) == 2 and group_legs['Price'].nunique() == 1:
+        summary_row = group[group['Structure'] == 'Roll']
+        if len(group_legs) == 2 and group_legs['Price'].nunique() == 1 and not summary_row.empty:
             # Mise à jour uniquement de la ligne de synthèse (summary) ayant Structure "Roll"
-            summary_indices = group[group['Structure'] == 'Roll'].index
-            final_sorted.loc[summary_indices, 'Structure'] = 'Roll-Client'
+            # summary_indices = group[group['Structure'] == 'Roll'].index
+            final_sorted.loc[summary_row.index, 'Structure'] = 'Roll Client'
+
+    final_sorted = detect_roll_clients_by_notional(final_sorted)
 
     return final_sorted
+
+def detect_roll_clients_by_notional(df):
+    """
+    Parcourt le DataFrame et transforme les lignes de structure 'Roll'
+    en 'Roll Client' si les deux 'Leg' associées partagent le même 'Notional'.
+    """
+    df = df.copy()
+    # Extraire l'ID commun aux Legs/Roll
+    df['RollGroup'] = df['Structure_ID'].str.extract(r'(\d{8}-R-\d+)')
+
+    roll_groups = df[df['Structure'].isin(['Roll', 'Leg'])].groupby('RollGroup')
+
+    for roll_id, group in roll_groups:
+        legs = group[group['Structure'] == 'Leg']
+        roll = group[group['Structure'] == 'Roll']
+        if len(legs) == 2 and legs['Notional'].nunique() == 1 and not roll.empty:
+            df.loc[roll.index, 'Structure'] = 'Roll Client'
+
+    df = df.drop(columns=['RollGroup'])
+    return df
 
 def postprocess_excel(final_sorted):
     output = io.BytesIO()
@@ -341,13 +365,17 @@ def main():
                     save_processed_data(processed_df)
                     download_buffer = postprocess_excel(processed_df)
                     st.success("Traitement terminé!")
+                    # Formatage de la date au format YYYYMMDD pour nommer le fichier
+                    filename_date = pd.to_datetime(trade_date).strftime("%Y%m%d")
                     st.download_button(
                         label="Télécharger le fichier traité",
                         data=download_buffer,
-                        file_name="fichier_traite.xlsx",
+                        file_name=f"{filename_date}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                    st.info("💡 Le fichier sera automatiquement téléchargé dans le dossier 'Téléchargements' par défaut de votre navigateur.")
                     st.dataframe(processed_df)
+
 
     # # ------------------------
     # # Affichage du calendrier en bas de page
