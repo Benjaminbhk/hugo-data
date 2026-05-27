@@ -137,8 +137,10 @@ def process_files(uploaded_files, trade_date):
     df_outright = final_df[outright_mask].copy()
 
     # Tri personnalisé des Roll selon le ticker
-    df_roll['roll_counter'] = df_roll['Structure_ID'].str.extract(r'-R-(\d+)-L').astype(int)
-    df_roll['ticker_last_digit'] = df_roll['Ticker'].str[-1].astype(int)
+    extracted_counter: pd.Series = df_roll['Structure_ID'].str.extract(r'-R-(\d+)-L', expand=False)
+    df_roll['roll_counter'] = pd.to_numeric(extracted_counter, errors='coerce').fillna(0).astype(int)
+    extracted_ticker_digit: pd.Series = df_roll['Ticker'].astype(str).str[-1]
+    df_roll['ticker_last_digit'] = pd.to_numeric(extracted_ticker_digit, errors='coerce').fillna(0).astype(int)
     df_roll['ticker_penult'] = df_roll['Ticker'].str[-2]
     order_map_letters = {'H': 1, 'M': 2, 'U': 3, 'Z': 4}
     df_roll['ticker_penult_order'] = df_roll['ticker_penult'].map(order_map_letters).fillna(99)
