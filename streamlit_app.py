@@ -56,9 +56,9 @@ def render_status_grid():
     days = last_days(45)
 
     rules = [
-        'div[class*="st-key-day-"] button {padding:2px;font-size:10px;'
-        'line-height:1.1;min-height:34px;height:34px;width:100%;'
-        'border-radius:4px;white-space:normal;}'
+        'div[class*="st-key-day-"] button {padding:2px 4px;font-size:12px;'
+        'line-height:1.2;min-height:30px;height:30px;width:100%;'
+        'border-radius:4px;white-space:nowrap;}'
     ]
     for day in days:
         if day.isoformat() in processed:
@@ -68,18 +68,20 @@ def render_status_grid():
             )
     st.markdown('<style>' + ''.join(rules) + '</style>', unsafe_allow_html=True)
 
-    cols = st.columns(45, gap="small")
-    for col, day in zip(cols, days):
-        done = day.isoformat() in processed
-        label = f"{day.day}  \n{MONTH_FR[day.month - 1]}"
-        with col:
-            if st.button(
-                label,
-                key=f"day-{day.isoformat()}",
-                disabled=not done,
-                help=f"{WEEKDAY_LABELS[day.weekday()]} {day.strftime('%d/%m/%Y')}",
-            ):
-                st.session_state['selected_day'] = day.isoformat()
+    per_row = 15
+    for start in range(0, len(days), per_row):
+        cols = st.columns(per_row, gap="small")
+        for col, day in zip(cols, days[start:start + per_row]):
+            done = day.isoformat() in processed
+            label = f"{day.day} {MONTH_FR[day.month - 1]}"
+            with col:
+                if st.button(
+                    label,
+                    key=f"day-{day.isoformat()}",
+                    disabled=not done,
+                    help=f"{WEEKDAY_LABELS[day.weekday()]} {day.strftime('%d/%m/%Y')}",
+                ):
+                    st.session_state['selected_day'] = day.isoformat()
 
     render_selected_day()
 
