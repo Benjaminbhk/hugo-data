@@ -1,3 +1,4 @@
+import calendar
 from datetime import date
 
 import pandas as pd
@@ -5,7 +6,7 @@ import streamlit as st
 from app.processing import load_dataframes, process_data, build_excel
 from app.recap import dedupe_dataframes, build_recap
 from app.status import (
-    load_processed_days, mark_day_processed, unmark_day_processed, last_days,
+    load_processed_days, mark_day_processed, unmark_day_processed,
     load_day_legs, save_day_legs, filter_cross_day_duplicates, days_with_legs,
 )
 
@@ -17,13 +18,16 @@ CHANGELOG = [
     ("20/07/2026", "Cases du calendrier décochables (mois affiché dans la case)"),
     ("19/07/2026", "Recap MSCI Rolls généré automatiquement, prêt à copier-coller"),
     ("19/07/2026", "Déduplication des trades entre fichiers qui se chevauchent"),
-    ("19/07/2026", "Suivi des 45 derniers jours traités en haut de page"),
+    ("20/07/2026", "Calendrier mensuel sur 3 mois (futur en gris clair)"),
+    ("19/07/2026", "Suivi des jours traités en haut de page"),
     ("19/07/2026", "Le résultat reste affiché après le téléchargement"),
 ]
 
 WEEKDAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 MONTH_FR = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin',
             'juil', 'août', 'sept', 'oct', 'nov', 'déc']
+MONTH_FR_FULL = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
 
 
 def render_sidebar():
@@ -53,35 +57,66 @@ def render_changelog():
 
 def render_status_grid():
     processed = load_processed_days()
-    days = last_days(45)
+    today = date.today()
+
+    months = []
+    year, month = today.year, today.month
+    for _ in range(3):
+        months.append((year, month))
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    months.reverse()
 
     rules = [
-        'div[class*="st-key-day-"] button {padding:2px 4px;font-size:12px;'
-        'line-height:1.2;min-height:30px;height:30px;width:100%;'
-        'border-radius:4px;white-space:nowrap;}'
+        'div[class*="st-key-day-"] button {padding:0;font-size:12px;'
+        'line-height:1;min-height:28px;height:28px;width:100%;'
+        'border-radius:4px;}'
     ]
-    for day in days:
-        if day.isoformat() in processed:
-            rules.append(
-                f'.st-key-day-{day.isoformat()} button '
-                '{background:#21b558;color:white;border:none;}'
-            )
+    for y, m in months:
+        for dnum in range(1, calendar.monthrange(y, m)[1] + 1):
+            day = date(y, m, dnum)
+            if day.isoformat() in processed:
+                rules.append(
+                    f'.st-key-day-{day.isoformat()} button '
+                    '{background:#21b558 !important;color:white !important;'
+                    'border:none;}'
+                )
+            elif day > today:
+                rules.append(
+                    f'.st-key-day-{day.isoformat()} button '
+                    '{background:#fafafa !important;color:#d9d9d9 !important;'
+                    'border:none;}'
+                )
     st.markdown('<style>' + ''.join(rules) + '</style>', unsafe_allow_html=True)
 
-    per_row = 15
-    for start in range(0, len(days), per_row):
-        cols = st.columns(per_row, gap="small")
-        for col, day in zip(cols, days[start:start + per_row]):
-            done = day.isoformat() in processed
-            label = f"{day.day} {MONTH_FR[day.month - 1]}"
-            with col:
-                if st.button(
-                    label,
-                    key=f"day-{day.isoformat()}",
-                    disabled=not done,
-                    help=f"{WEEKDAY_LABELS[day.weekday()]} {day.strftime('%d/%m/%Y')}",
-                ):
-                    st.session_state['selected_day'] = day.isoformat()
+    month_cols = st.columns(3, gap="large")
+    for (y, m), month_col in zip(months, month_cols):
+        with month_col:
+            st.markdown(f"**{MONTH_FR_FULL[m - 1]} {y}**")
+            headers = st.columns(7, gap="small")
+            for header_col, lbl in zip(headers, WEEKDAY_LABELS):
+                header_col.markdown(
+                    f'<div style="text-align:center;font-size:10px;'
+                    f'color:#999;">{lbl}</div>',
+                    unsafe_allow_html=True,
+                )
+            for week in calendar.Calendar().monthdayscalendar(y, m):
+                week_cols = st.columns(7, gap="small")
+                for day_col, dnum in zip(week_cols, week):
+                    if dnum == 0:
+                        continue
+                    day = date(y, m, dnum)
+                    done = day.isoformat() in processed
+                    with day_col:
+                        if st.button(
+                            str(dnum),
+                            key=f"day-{day.isoformat()}",
+                            disabled=not done,
+                            help=f"{WEEKDAY_LABELS[day.weekday()]} "
+                                 f"{day.strftime('%d/%m/%Y')}",
+                        ):
+                            st.session_state['selected_day'] = day.isoformat()
 
     render_selected_day()
 
@@ -187,7 +222,7 @@ def main():
 
     st.title("Application de traitement des fichiers Excel")
     render_explorer()
-    st.caption("Jours traités sur les 45 derniers jours :")
+    st.caption("Jours traités sur les 3 derniers mois (vert = traité) :")
     render_status_grid()
 
     uploaded_files = st.file_uploader(

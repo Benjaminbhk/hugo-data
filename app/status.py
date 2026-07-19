@@ -1,6 +1,5 @@
 import json
 import os
-from datetime import date, timedelta
 
 import pandas as pd
 
@@ -46,11 +45,6 @@ def unmark_day_processed(day_iso):
         os.remove(_legs_file(day_iso))
     except OSError:
         pass
-
-
-def last_days(n=45):
-    today = date.today()
-    return [today - timedelta(days=i) for i in range(n - 1, -1, -1)]
 
 
 def _legs_file(day_iso):
