@@ -10,6 +10,7 @@ from app.status import (
 )
 
 CHANGELOG = [
+    ("20/07/2026", "Cliquer sur un jour vert permet d'afficher le recap de la journée"),
     ("20/07/2026", "Mémoire des lignes traitées : relancer un jour cumule sans doublon"),
     ("20/07/2026", "Détection des lignes déjà traitées un autre jour"),
     ("20/07/2026", "Cases du calendrier décochables (mois affiché dans la case)"),
@@ -39,24 +40,35 @@ def render_changelog():
 
 def render_status_grid():
     processed = load_processed_days()
-    cells = []
-    for day in last_days(45):
+    days = last_days(45)
+
+    rules = [
+        'div[class*="st-key-day-"] button {padding:2px;font-size:10px;'
+        'line-height:1.1;min-height:34px;height:34px;width:100%;'
+        'border-radius:4px;white-space:normal;}'
+    ]
+    for day in days:
+        if day.isoformat() in processed:
+            rules.append(
+                f'.st-key-day-{day.isoformat()} button '
+                '{background:#21b558;color:white;border:none;}'
+            )
+    st.markdown('<style>' + ''.join(rules) + '</style>', unsafe_allow_html=True)
+
+    cols = st.columns(45, gap="small")
+    for col, day in zip(cols, days):
         done = day.isoformat() in processed
-        weekend = day.weekday() >= 5
-        color = '#21b558' if done else ('#f0f0f0' if weekend else '#dcdcdc')
-        text_color = 'white' if done else '#888'
-        cells.append(
-            f'<div title="{WEEKDAY_LABELS[day.weekday()]} {day.strftime("%d/%m/%Y")}" '
-            f'style="width:34px;height:34px;border-radius:4px;background:{color};'
-            f'color:{text_color};font-size:12px;line-height:1.1;display:flex;'
-            f'flex-direction:column;align-items:center;justify-content:center;">'
-            f'{day.day}<span style="font-size:8px;">{MONTH_FR[day.month - 1]}</span></div>'
-        )
-    st.markdown(
-        '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:0.5rem;">'
-        + ''.join(cells) + '</div>',
-        unsafe_allow_html=True,
-    )
+        label = f"{day.day}  \n{MONTH_FR[day.month - 1]}"
+        with col:
+            if st.button(
+                label,
+                key=f"day-{day.isoformat()}",
+                disabled=not done,
+                help=f"{WEEKDAY_LABELS[day.weekday()]} {day.strftime('%d/%m/%Y')}",
+            ):
+                st.session_state['selected_day'] = day.isoformat()
+
+    render_selected_day()
 
     greens = sorted(d for d in processed)
     if greens:
@@ -74,6 +86,40 @@ def render_status_grid():
                 for d in to_remove:
                     unmark_day_processed(d)
                 st.rerun()
+
+
+def recap_for_day(day):
+    legs = load_day_legs(day)
+    if legs is None or legs.empty:
+        return None
+    processed_df, error = process_data([legs], pd.Timestamp(day))
+    if error:
+        return None
+    return build_recap(processed_df, pd.Timestamp(day))
+
+
+def render_selected_day():
+    selected = st.session_state.get('selected_day')
+    if not selected:
+        return
+    day = date.fromisoformat(selected)
+    with st.container(border=True):
+        head, close = st.columns([8, 1])
+        head.markdown(f"**Jour sélectionné : {day.strftime('%d/%m/%Y')}**")
+        if close.button("✕", key="close_selected_day", help="Fermer"):
+            st.session_state.pop('selected_day', None)
+            st.rerun()
+        if st.button("Afficher le recap de la journée", key="show_day_recap"):
+            st.session_state['day_recap'] = (selected, recap_for_day(day))
+        cached = st.session_state.get('day_recap')
+        if cached and cached[0] == selected:
+            if cached[1] is None:
+                st.info(
+                    "Aucune mémoire de lignes pour ce jour "
+                    "(traité avant la mise en place de la mémoire)."
+                )
+            else:
+                st.code(cached[1], language=None)
 
 
 def main():
