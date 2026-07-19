@@ -16,6 +16,22 @@ L0_RE = re.compile(r'^([A-Z]{3})([FGHJKMNQUVXZ])(\d)([FGHJKMNQUVXZ])(\d)$')
 DEDUP_KEY = ['Ticker', 'Time', 'Size', 'Price']
 
 
+def row_keys(df):
+    """
+    Clé d'identité d'un trade, robuste aux allers-retours CSV/Excel :
+    les numériques sont normalisés (2133 == 2133.0), les textes nettoyés.
+    """
+    parts = []
+    for col in DEDUP_KEY:
+        if col not in df.columns:
+            continue
+        s = df[col]
+        if col in ('Size', 'Price'):
+            s = pd.to_numeric(s, errors='coerce').round(6)
+        parts.append(s.astype(str).str.strip())
+    return parts[0].str.cat(parts[1:], sep='|')
+
+
 def dedupe_dataframes(dataframes):
     """
     Fusionne plusieurs exports Bloomberg en supprimant les doublons.
@@ -27,11 +43,14 @@ def dedupe_dataframes(dataframes):
     occurrence. Retourne (DataFrame fusionné, nombre de doublons supprimés).
     """
     merged = pd.concat(dataframes, ignore_index=True)
+    # Normalisation : les lignes reprises de la mémoire (CSV) et celles des
+    # exports Excel doivent produire la même clé de déduplication
     if 'Ticker' in merged.columns:
         merged['Ticker'] = merged['Ticker'].astype(str).str.strip()
+    if 'Time' in merged.columns:
+        merged['Time'] = merged['Time'].astype(str).str.strip()
     before = len(merged)
-    key = [c for c in DEDUP_KEY if c in merged.columns]
-    merged = merged.drop_duplicates(subset=key, keep='last').reset_index(drop=True)
+    merged = merged[~row_keys(merged).duplicated(keep='last')].reset_index(drop=True)
     return merged, before - len(merged)
 
 
