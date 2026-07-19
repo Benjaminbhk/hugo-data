@@ -34,6 +34,22 @@ app/
 - `_reorder_columns()` doit toujours être appelé avant `build_excel()`
 - `detect_roll_clients` : Roll Client si legs ont même Price **OU** même Notional
 
+## Évolutions en attente
+
+- **Connexion Bloomberg automatique** (reporté, à faire avec Hugo) :
+  l'IT de sa boîte doit activer un export Bloomberg planifié (~7h, « 3 clics »),
+  bloqué par crainte d'un surcoût de forfait données. Quand c'est actif :
+  ingestion automatique par l'app (mail dédié / SFTP / stockage Azure, selon
+  la destination de l'export). Alternative : script `blpapi` sur le poste de
+  Hugo (Terminal requis). Un export horodaté résoudrait aussi la détection de
+  date (impossible aujourd'hui : les fichiers grid1 n'ont ni colonne date ni
+  métadonnées utiles). Licence Bloomberg : pas de redistribution hors poste.
+- **Config Azure à faire** : `HUGO_DATA_DIR=/home/data` (Web App HugoData →
+  Configuration) pour garantir la persistance de la mémoire des jours traités.
+- **Bug latent** : `process_data` casse avec pandas ≥ 3 (assignation de
+  formules texte dans une colonne float, `processing.py` ~l.201) — sans risque
+  tant que pandas < 3 est épinglé.
+
 ## Stack
 
 - Python 3.x, pandas, numpy, openpyxl, streamlit
