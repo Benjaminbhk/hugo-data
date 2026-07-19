@@ -16,6 +16,8 @@ Application Streamlit déployée — **outil fini, pas en développement actif**
 streamlit_app.py       # UI Streamlit (entry point déploiement)
 app/
   processing.py        # Toute la logique métier — source unique
+  recap.py             # Dédup multi-fichiers + génération du recap texte
+  status.py            # Persistance des jours traités (~/.hugo-data)
   script-hugo.py       # UI tkinter (usage local)
 ```
 
@@ -35,4 +37,7 @@ app/
 ## Stack
 
 - Python 3.x, pandas, numpy, openpyxl, streamlit
-- Déploiement : Streamlit Cloud (pas de filesystem persistant → pas de CSV local)
+- Déploiement : Azure App Service (Web App `HugoData`, région Japan West)
+  - URL : https://hugodata-bfaqf6buehfce8ad.japanwest-01.azurewebsites.net/
+  - Déploiement auto via GitHub Actions (`.github/workflows/main_hugodata.yml`) à chaque push sur `main`
+  - Pas de filesystem persistant → pas de CSV local

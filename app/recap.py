@@ -1,0 +1,140 @@
+import re
+import pandas as pd
+
+MONTH_CODES = {
+    'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6,
+    'N': 7, 'Q': 8, 'U': 9, 'V': 10, 'X': 11, 'Z': 12,
+}
+MONTH_LABELS = {
+    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+}
+
+LEG_RE = re.compile(r'^([A-Z]{3})([FGHJKMNQUVXZ])(\d)$')
+L0_RE = re.compile(r'^([A-Z]{3})([FGHJKMNQUVXZ])(\d)([FGHJKMNQUVXZ])(\d)$')
+
+DEDUP_KEY = ['Ticker', 'Time', 'Size', 'Price']
+
+
+def dedupe_dataframes(dataframes):
+    """
+    Fusionne plusieurs exports Bloomberg en supprimant les doublons.
+
+    Bloomberg plafonne chaque export à 100 lignes : une même journée arrive
+    en plusieurs fichiers qui se chevauchent. Un même trade garde (Ticker,
+    Time, Size, Price) constants d'un export à l'autre, alors que Volume,
+    1DChg et UndPrc dérivent au fil de la journée — on garde la dernière
+    occurrence. Retourne (DataFrame fusionné, nombre de doublons supprimés).
+    """
+    merged = pd.concat(dataframes, ignore_index=True)
+    if 'Ticker' in merged.columns:
+        merged['Ticker'] = merged['Ticker'].astype(str).str.strip()
+    before = len(merged)
+    key = [c for c in DEDUP_KEY if c in merged.columns]
+    merged = merged.drop_duplicates(subset=key, keep='last').reset_index(drop=True)
+    return merged, before - len(merged)
+
+
+def _expiry(month_code, year_digit, trade_year):
+    year = trade_year - trade_year % 10 + int(year_digit)
+    if year < trade_year - 2:
+        year += 10
+    return year, MONTH_CODES[month_code]
+
+
+def _label(year, month, trade_year):
+    # Convention de Hugo : Jun/Sep de l'année en cours sans suffixe,
+    # toute échéance au-delà avec l'année (Dec26, Jun27…)
+    lab = MONTH_LABELS[month]
+    if year != trade_year or month > 9:
+        lab += str(year)[2:]
+    return lab
+
+
+def _fmt_notional(value):
+    if value >= 1e9:
+        s = f'{value / 1e9:.1f}'.rstrip('0').rstrip('.')
+        return f'${s}bn'
+    return f'${value / 1e6:.0f}mn'
+
+
+def _fmt_level(value):
+    # Les spreads sont cotés par pas de 0.0025 : arrondir au pas élimine
+    # le bruit des prix moyens (1.2499 -> 1.25)
+    quantized = round(round(value / 0.0025) * 0.0025, 4)
+    return f'{quantized:g}'
+
+
+def build_recap(df, trade_date):
+    """
+    Construit le texte 'Recap MSCI Rolls' à partir du DataFrame traité
+    par process_data : une ligne par (sous-jacent, paire d'échéances) avec
+    les niveaux distincts traités et le notional total (moyenne des legs).
+    """
+    trade_date = pd.Timestamp(trade_date)
+    trade_year = trade_date.year
+    groups = {}
+    others = []
+
+    def add(key, level, notional):
+        entry = groups.setdefault(key, {'levels': [], 'notional': 0.0})
+        if level is not None:
+            lvl = _fmt_level(level)
+            if lvl not in entry['levels'] and lvl != '0':
+                entry['levels'].append(lvl)
+        entry['notional'] += notional
+
+    rolls = df[df['Structure_ID'].astype(str).str.contains('-R-', na=False)].copy()
+    rolls['_roll'] = rolls['Structure_ID'].astype(str).str.extract(r'(\d{8}-R-\d+)')
+
+    for _, grp in rolls.groupby('_roll'):
+        legs = grp[grp['Structure'] == 'Leg']
+        if len(legs) == 2:
+            parsed = []
+            for _, leg in legs.iterrows():
+                m = LEG_RE.match(str(leg['Ticker']).strip())
+                if m:
+                    root, mc, yd = m.groups()
+                    parsed.append((_expiry(mc, yd, trade_year), root, leg))
+            if len(parsed) != 2:
+                others.append(grp)
+                continue
+            parsed.sort(key=lambda p: p[0])
+            (near_exp, root, near), (far_exp, _, far) = parsed
+            if near_exp == far_exp:
+                continue
+            level = (far['Price'] / near['Price'] - 1) * 100
+            notional = (near['Notional'] + far['Notional']) / 2
+            key = (root,
+                   _label(near_exp[0], near_exp[1], trade_year),
+                   _label(far_exp[0], far_exp[1], trade_year))
+            add(key, level, notional)
+        else:
+            single = grp[grp['Structure'].isin(['Roll', 'Roll Client'])]
+            for _, row in single.iterrows():
+                m = L0_RE.match(str(row['Ticker']).strip())
+                if not m:
+                    others.append(grp)
+                    break
+                root, m1, y1, m2, y2 = m.groups()
+                e1 = _expiry(m1, y1, trade_year)
+                e2 = _expiry(m2, y2, trade_year)
+                (near_exp, far_exp) = sorted([e1, e2])
+                price = row['Price']
+                level = price if pd.notna(price) and 0 < abs(price) < 20 else None
+                key = (root,
+                       _label(near_exp[0], near_exp[1], trade_year),
+                       _label(far_exp[0], far_exp[1], trade_year))
+                add(key, level, row['Notional'])
+
+    lines = [f"Recap MSCI Rolls {trade_date.strftime('%d/%m/%Y')}", '']
+    ordered = sorted(groups.items(), key=lambda kv: -kv[1]['notional'])
+    for (root, near, far), entry in ordered:
+        levels = ' + '.join(entry['levels']) if entry['levels'] else '-'
+        lines.append(f"{root} {near}/{far} @ {levels} {_fmt_notional(entry['notional'])}")
+
+    n_others = sum(len(g) for g in others)
+    if n_others:
+        lines.append('')
+        lines.append(f'({n_others} lignes de roll non classées — tickers non reconnus)')
+    return '\n'.join(lines)
