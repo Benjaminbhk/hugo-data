@@ -6,10 +6,11 @@ from app.processing import load_dataframes, process_data, build_excel
 from app.recap import dedupe_dataframes, build_recap
 from app.status import (
     load_processed_days, mark_day_processed, unmark_day_processed, last_days,
-    load_day_legs, save_day_legs, filter_cross_day_duplicates,
+    load_day_legs, save_day_legs, filter_cross_day_duplicates, days_with_legs,
 )
 
 CHANGELOG = [
+    ("20/07/2026", "Explorateur des tableaux et recaps en mémoire (boutons en haut à gauche)"),
     ("20/07/2026", "Cliquer sur un jour vert permet d'afficher le recap de la journée"),
     ("20/07/2026", "Mémoire des lignes traitées : relancer un jour cumule sans doublon"),
     ("20/07/2026", "Détection des lignes déjà traitées un autre jour"),
@@ -23,6 +24,18 @@ CHANGELOG = [
 WEEKDAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 MONTH_FR = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin',
             'juil', 'août', 'sept', 'oct', 'nov', 'déc']
+
+
+def render_sidebar():
+    with st.sidebar:
+        st.markdown("**Explorer la mémoire**")
+        tables, recaps = st.columns(2)
+        if tables.button("📊 Tableaux"):
+            st.session_state['explore'] = 'tables'
+        if recaps.button("🧾 Recaps"):
+            st.session_state['explore'] = 'recaps'
+        st.divider()
+    render_changelog()
 
 
 def render_changelog():
@@ -122,11 +135,56 @@ def render_selected_day():
                 st.code(cached[1], language=None)
 
 
+def render_explorer():
+    mode = st.session_state.get('explore')
+    if not mode:
+        return
+    title = "Mémoire des tableaux" if mode == 'tables' else "Mémoire des recaps"
+    with st.container(border=True):
+        head, close = st.columns([8, 1])
+        head.subheader(title)
+        if close.button("✕", key="close_explorer", help="Fermer"):
+            st.session_state.pop('explore', None)
+            st.rerun()
+        days = days_with_legs()
+        if not days:
+            st.info("Aucune journée en mémoire pour l'instant.")
+            return
+        selected = st.selectbox(
+            "Journée",
+            days,
+            format_func=lambda d: date.fromisoformat(d).strftime('%d/%m/%Y'),
+            key="explore_day",
+        )
+        day = date.fromisoformat(selected)
+        if mode == 'recaps':
+            recap = recap_for_day(day)
+            if recap is None:
+                st.error("Impossible de recalculer le recap de ce jour.")
+            else:
+                st.code(recap, language=None)
+        else:
+            legs = load_day_legs(day)
+            processed_df, error = process_data([legs], pd.Timestamp(day))
+            if error:
+                st.error(error)
+                return
+            st.download_button(
+                label="Télécharger l'Excel du jour",
+                data=build_excel(processed_df).getvalue(),
+                file_name=f"{day.strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="explore_download",
+            )
+            st.dataframe(processed_df)
+
+
 def main():
     st.set_page_config(page_title="Hugo Data", layout="wide")
-    render_changelog()
+    render_sidebar()
 
     st.title("Application de traitement des fichiers Excel")
+    render_explorer()
     st.caption("Jours traités sur les 45 derniers jours :")
     render_status_grid()
 

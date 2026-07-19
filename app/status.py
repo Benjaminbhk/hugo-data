@@ -62,6 +62,16 @@ def save_day_legs(day, df):
     df.to_csv(_legs_file(day.isoformat()), index=False)
 
 
+def days_with_legs():
+    """Jours ayant des lignes en mémoire, triés du plus récent au plus ancien."""
+    if not os.path.isdir(LEGS_DIR):
+        return []
+    return sorted(
+        (f[:-4] for f in os.listdir(LEGS_DIR) if f.endswith('.csv')),
+        reverse=True,
+    )
+
+
 def load_day_legs(day):
     """Lignes déjà traitées pour ce jour, ou None."""
     try:
