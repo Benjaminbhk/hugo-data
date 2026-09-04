@@ -5,10 +5,22 @@ MONTH_CODES = {
     'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6,
     'N': 7, 'Q': 8, 'U': 9, 'V': 10, 'X': 11, 'Z': 12,
 }
-MONTH_LABELS = {
-    1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun',
-    7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec',
+MONTH_LETTERS = {v: k for k, v in MONTH_CODES.items()}
+
+# Ordre d'affichage du recap voulu par Hugo : 4 groupes par importance,
+# separes par une ligne vide. Un ticker hors liste est rejete en fin de recap.
+TICKER_GROUPS = [
+    ['ZTW'],
+    ['FKB', 'ZSI', 'FMI', 'ZTO', 'ZSS', 'FPP', 'ZTI'],
+    ['ZVL', 'MUR', 'FPO', 'JJY'],
+    ['ZSR', 'ZVO', 'ZWO', 'ZVW'],
+]
+TICKER_RANK = {
+    root: (gi, ti)
+    for gi, group in enumerate(TICKER_GROUPS)
+    for ti, root in enumerate(group)
 }
+UNRANKED = (len(TICKER_GROUPS), 0)
 
 LEG_RE = re.compile(r'^([A-Z]{3})([FGHJKMNQUVXZ])(\d)$')
 L0_RE = re.compile(r'^([A-Z]{3})([FGHJKMNQUVXZ])(\d)([FGHJKMNQUVXZ])(\d)$')
@@ -61,20 +73,17 @@ def _expiry(month_code, year_digit, trade_year):
     return year, MONTH_CODES[month_code]
 
 
-def _label(year, month, trade_year):
-    # Convention de Hugo : Jun/Sep de l'année en cours sans suffixe,
-    # toute échéance au-delà avec l'année (Dec26, Jun27…)
-    lab = MONTH_LABELS[month]
-    if year != trade_year or month > 9:
-        lab += str(year)[2:]
-    return lab
+def _code(year, month):
+    # Encodage Bloomberg d'une echeance : lettre du mois + dernier chiffre
+    # de l'annee (mars 2026 -> H6)
+    return f'{MONTH_LETTERS[month]}{str(year)[-1]}'
 
 
 def _fmt_notional(value):
     if value >= 1e9:
         s = f'{value / 1e9:.1f}'.rstrip('0').rstrip('.')
         return f'${s}bn'
-    return f'${value / 1e6:.0f}mn'
+    return f'${value / 1e6:.0f}m'
 
 
 def _fmt_level(value):
@@ -124,9 +133,7 @@ def build_recap(df, trade_date):
                 continue
             level = (far['Price'] / near['Price'] - 1) * 100
             notional = (near['Notional'] + far['Notional']) / 2
-            key = (root,
-                   _label(near_exp[0], near_exp[1], trade_year),
-                   _label(far_exp[0], far_exp[1], trade_year))
+            key = (root, _code(*near_exp), _code(*far_exp))
             add(key, level, notional)
         else:
             single = grp[grp['Structure'].isin(['Roll', 'Roll Client'])]
@@ -141,16 +148,24 @@ def build_recap(df, trade_date):
                 (near_exp, far_exp) = sorted([e1, e2])
                 price = row['Price']
                 level = price if pd.notna(price) and 0 < abs(price) < 20 else None
-                key = (root,
-                       _label(near_exp[0], near_exp[1], trade_year),
-                       _label(far_exp[0], far_exp[1], trade_year))
+                key = (root, _code(*near_exp), _code(*far_exp))
                 add(key, level, row['Notional'])
 
     lines = [f"Recap MSCI Rolls {trade_date.strftime('%d/%m/%Y')}", '']
-    ordered = sorted(groups.items(), key=lambda kv: -kv[1]['notional'])
+    ordered = sorted(
+        groups.items(),
+        key=lambda kv: (TICKER_RANK.get(kv[0][0], UNRANKED), -kv[1]['notional']),
+    )
+    current_group = None
     for (root, near, far), entry in ordered:
+        group = TICKER_RANK.get(root, UNRANKED)[0]
+        # Ligne vide entre deux groupes presents : un groupe sans trade du
+        # jour ne laisse pas de trou dans le recap
+        if current_group is not None and group != current_group:
+            lines.append('')
+        current_group = group
         levels = ' + '.join(entry['levels']) if entry['levels'] else '-'
-        lines.append(f"{root} {near}/{far} @ {levels} {_fmt_notional(entry['notional'])}")
+        lines.append(f"{root}{near}{far} @ {levels} {_fmt_notional(entry['notional'])}")
 
     n_others = sum(len(g) for g in others)
     if n_others:
