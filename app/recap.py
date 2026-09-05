@@ -80,10 +80,19 @@ def _code(year, month):
 
 
 def _fmt_notional(value):
-    if value >= 1e9:
-        s = f'{value / 1e9:.1f}'.rstrip('0').rstrip('.')
-        return f'${s}bn'
-    return f'${value / 1e6:.0f}m'
+    # Arrondis demandes par Hugo : sous 10m on garde la decimale, de 10 a 100m
+    # on cale sur un pas de 5, au-dela on cale sur la dizaine
+    m = value / 1e6
+    if m < 10:
+        m = round(m, 1)
+    elif m < 100:
+        m = round(m / 5) * 5
+    else:
+        m = round(m / 10) * 10
+    if m >= 1000:
+        s = f'{m / 1000:.2f}'.rstrip('0').rstrip('.')
+        return f'{s}b'
+    return f'{m:g}m'
 
 
 def _fmt_level(value):
